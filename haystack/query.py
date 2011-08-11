@@ -2,6 +2,7 @@ import operator
 import re
 import warnings
 from django.conf import settings
+from django.utils.encoding import force_unicode
 from haystack.backends import SQ
 from haystack.constants import REPR_OUTPUT_SIZE, ITERATOR_LOAD_PER_QUERY, DEFAULT_OPERATOR
 from haystack.exceptions import NotRegistered
@@ -179,15 +180,13 @@ class SearchQuerySet(object):
         
         for result in results:
             if self._load_all:
-                # We have to deal with integer keys being cast from strings
                 model_objects = loaded_objects.get(result.model, {})
-                if not result.pk in model_objects:
-                    try:
-                        result.pk = int(result.pk)
-                    except ValueError:
-                        pass
+                # force all the keys to unicode to check against search index
+                model_objects = dict(
+                    [(force_unicode(k), v) for k, v in model_objects.items()]
+                )
                 try:
-                    result._object = model_objects[result.pk]
+                    result._object = model_objects[force_unicode(result.pk)]
                 except KeyError:
                     # The object was either deleted since we indexed or should
                     # be ignored; fail silently.
@@ -593,15 +592,14 @@ class RelatedSearchQuerySet(SearchQuerySet):
         
         for result in results:
             if self._load_all:
-                # We have to deal with integer keys being cast from strings; if this
-                # fails we've got a character pk.
+                model_objects = loaded_objects.get(result.model, {})
+                # force all the keys to unicode to check against search index
+                model_objects = dict(
+                    [(force_unicode(k), v) for k, v in model_objects.items()]
+                )
                 try:
-                    result.pk = int(result.pk)
-                except ValueError:
-                    pass
-                try:
-                    result._object = loaded_objects[result.model][result.pk]
-                except (KeyError, IndexError):
+                    result._object = model_objects[force_unicode(result.pk)]
+                except KeyError:
                     # The object was either deleted since we indexed or should
                     # be ignored; fail silently.
                     self._ignored_result_count += 1
